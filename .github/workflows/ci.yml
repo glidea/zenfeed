@@ -2,11 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
     branches: [ main ]
-  release:
-    types: [ published ]
 
 jobs:
   test:
@@ -27,7 +25,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'release'
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -37,5 +35,9 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push Docker images
+      - name: Build and push Docker image (main)
+        if: github.ref_name == 'main'
         run: make push
+      - name: Build and push Docker image (dev)
+        if: github.ref_name == 'dev'
+        run: make dev-push

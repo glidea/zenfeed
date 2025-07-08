@@ -41,6 +41,7 @@ This section defines the list of available Large Language Models. At least one L
 | `llms[].api_key`         | `string`  | API key for the LLM.                                                                                                                                                                                                                                 |                             | Yes                                                        |
 | `llms[].model`           | `string`  | Model of the LLM. E.g., `gpt-4o-mini`. Cannot be empty if used for generation tasks (e.g., summarization). If this LLM is used, cannot be empty along with `embedding_model`.                                                                        |                             | Conditionally Required                                     |
 | `llms[].embedding_model` | `string`  | Embedding model of the LLM. E.g., `text-embedding-3-small`. Cannot be empty if used for embedding. If this LLM is used, cannot be empty along with `model`. **Note:** Do not modify directly after initial use; add a new LLM configuration instead. |                             | Conditionally Required                                     |
+| `llms[].tts_model`       | `string`  | The Text-to-Speech (TTS) model of the LLM.                                                                                                                                                                                                           |                             | No                                                         |
 | `llms[].temperature`     | `float32` | Temperature of the LLM (0-2).                                                                                                                                                                                                                        | `0.0`                       | No                                                         |
 
 ### Jina AI Configuration (`jina`)
@@ -80,10 +81,11 @@ Describes each source to be scraped.
 
 ### Storage Configuration (`storage`)
 
-| Field          | Type     | Description                                                                     | Default Value         | Required |
-| :------------- | :------- | :------------------------------------------------------------------------------ | :-------------------- | :------- |
-| `storage.dir`  | `string` | Base directory for all storage. Cannot be changed after the application starts. | `./data`              | No       |
-| `storage.feed` | `object` | Feed storage configuration. See **Feed Storage Configuration** below.           | (See specific fields) | No       |
+| Field            | Type     | Description                                                                                               | Default Value         | Required |
+| :--------------- | :------- | :-------------------------------------------------------------------------------------------------------- | :-------------------- | :------- |
+| `storage.dir`    | `string` | Base directory for all storage. Cannot be changed after the application starts.                           | `./data`              | No       |
+| `storage.feed`   | `object` | Feed storage configuration. See **Feed Storage Configuration** below.                                     | (See specific fields) | No       |
+| `storage.object` | `object` | Object storage configuration for storing files like podcasts. See **Object Storage Configuration** below. | (See specific fields) | No       |
 
 ### Feed Storage Configuration (`storage.feed`)
 
@@ -94,6 +96,16 @@ Describes each source to be scraped.
 | `storage.feed.embedding_llm`  | `string`          | Name of the LLM used for feed embedding (from `llms` section). Significantly impacts semantic search accuracy. **Note:** If switching, keep the old LLM configuration as past data is implicitly associated with it, otherwise past data cannot be semantically searched. | Default LLM in `llms` section | No       |
 | `storage.feed.retention`      | `time.Duration`   | Retention duration for feeds.                                                                                                                                                                                                                                             | `8d`                          | No       |
 | `storage.feed.block_duration` | `time.Duration`   | Retention duration for each time-based feed storage block (similar to Prometheus TSDB Block).                                                                                                                                                                             | `25h`                         | No       |
+
+### Object Storage Configuration (`storage.object`)
+
+| Field                              | Type     | Description                                  | Default Value | Required                       |
+| :--------------------------------- | :------- | :------------------------------------------- | :------------ | :----------------------------- |
+| `storage.object.endpoint`          | `string` | The endpoint of the object storage.          |               | Yes (if using podcast feature) |
+| `storage.object.access_key_id`     | `string` | The access key id of the object storage.     |               | Yes (if using podcast feature) |
+| `storage.object.secret_access_key` | `string` | The secret access key of the object storage. |               | Yes (if using podcast feature) |
+| `storage.object.bucket`            | `string` | The bucket of the object storage.            |               | Yes (if using podcast feature) |
+| `storage.object.bucket`        | `string` | The URL of the object storage bucket.        |               | No                             |
 
 ### Rewrite Rule Configuration (`storage.feed.rewrites[]`)
 
@@ -109,12 +121,8 @@ Defines rules to process feeds before storage. Rules are applied sequentially.
 | `...rewrites[].match_re`                 | `string`          | Regular expression to match against the (transformed) text.                                                                                                                                                                                 | `.*` (matches all)       | No (use `match` or `match_re`)                |
 | `...rewrites[].action`                   | `string`          | Action to perform on match: `create_or_update_label` (adds/updates a label with the matched/transformed text), `drop_feed` (discards the feed entirely).                                                                                    | `create_or_update_label` | No                                            |
 | `...rewrites[].label`                    | `string`          | Name of the feed label to create or update.                                                                                                                                                                                                 |                          | Yes (if `action` is `create_or_update_label`) |
-
-### Rewrite Rule Transform Configuration (`storage.feed.rewrites[].transform`)
-
-| Field                  | Type     | Description                                                                                    | Default Value | Required |
-| :--------------------- | :------- | :--------------------------------------------------------------------------------------------- | :------------ | :------- |
-| `...transform.to_text` | `object` | Transforms source text to text using an LLM. See **Rewrite Rule To Text Configuration** below. | `nil`         | No       |
+| `...transform.to_text`                   | `object`          | Transforms source text to text using an LLM. See **Rewrite Rule To Text Configuration** below.                                                                                                                                              | `nil`                    | No                                            |
+| `...transform.to_podcast`                | `object`          | Transforms source text to a podcast. See **Rewrite Rule To Podcast Configuration** below.                                                                                                                                                   | `nil`                    | No                                            |
 
 ### Rewrite Rule To Text Configuration (`storage.feed.rewrites[].transform.to_text`)
 
@@ -124,7 +132,26 @@ This configuration defines how to transform the text from `source_label`.
 | :------------------ | :------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :-------------------------- |
 | `...to_text.type`   | `string` | Type of transformation. Options: <ul><li>`prompt` (default): Uses an LLM and a specified prompt to transform the source text.</li><li>`crawl`: Treats the source text as a URL, directly crawls the web page content pointed to by the URL, and converts it to Markdown format. This method performs local crawling and attempts to follow `robots.txt`.</li><li>`crawl_by_jina`: Treats the source text as a URL, crawls and processes web page content via the [Jina AI Reader API](https://jina.ai/reader/), and returns Markdown. Potentially more powerful, e.g., for handling dynamic pages, but relies on the Jina AI service.</li></ul> | `prompt`                      | No                          |
 | `...to_text.llm`    | `string` | **Only valid if `type` is `prompt`.** Name of the LLM used for transformation (from `llms` section). If not specified, the LLM marked as `default: true` in the `llms` section will be used.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Default LLM in `llms` section | No                          |
-| `...to_text.prompt` | `string` | **Only valid if `type` is `prompt`.** Prompt used for transformation. The source text will be injected. You can use Go template syntax to reference built-in prompts: `{{ .summary }}`, `{{ .category }}`, `{{ .tags }}`, `{{ .score }}`, `{{ .comment_confucius }}`, `{{ .summary_html_snippet }}`.                                                                                                                                                                                                                                                                                                                                            |                               | Yes (if `type` is `prompt`) |
+| `...to_text.prompt` | `string` | **Only valid if `type` is `prompt`.** Prompt used for transformation. The source text will be injected. You can use Go template syntax to reference built-in prompts: `{{ .summary }}`, `{{ .category }}`, `{{ .tags }}`, `{{ .score }}`, `{{ .comment_confucius }}`, `{{ .summary_html_snippet }}`, `{{ .summary_html_snippet_for_small_model }}`.                                                                                                                                                                                                                                                                                             |                               | Yes (if `type` is `prompt`) |
+
+### Rewrite Rule To Podcast Configuration (`storage.feed.rewrites[].transform.to_podcast`)
+
+This configuration defines how to transform the text from `source_label` into a podcast.
+
+| Field                                        | Type              | Description                                                                                                                                    | Default Value                 | Required |
+| :------------------------------------------- | :---------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :------- |
+| `...to_podcast.llm`                          | `string`          | The name of the LLM (from the `llms` section) to use for generating the podcast script.                                                        | Default LLM in `llms` section | No       |
+| `...to_podcast.transcript_additional_prompt` | `string`          | Additional instructions to append to the prompt for generating the podcast script.                                                             |                               | No       |
+| `...to_podcast.tts_llm`                      | `string`          | The name of the LLM (from the `llms` section) to use for Text-to-Speech (TTS). **Note: Currently only supports LLMs with `provider: gemini`**. | Default LLM in `llms` section | No       |
+| `...to_podcast.speakers`                     | `list of objects` | A list of speakers for the podcast. See **Speaker Configuration** below.                                                                       | `[]`                          | Yes      |
+
+#### Speaker Configuration (`...to_podcast.speakers[]`)
+
+| Field                 | Type     | Description                          | Default Value | Required |
+| :-------------------- | :------- | :----------------------------------- | :------------ | :------- |
+| `...speakers[].name`  | `string` | The name of the speaker.             |               | Yes      |
+| `...speakers[].role`  | `string` | The role description of the speaker. |               | No       |
+| `...speakers[].voice` | `string` | The voice of the speaker.            |               | Yes      |
 
 ### Scheduling Configuration (`scheduls`)
 
@@ -173,10 +200,11 @@ This structure can be nested using `sub_routes`. Feeds will first try to match s
 
 Defines *who* receives notifications.
 
-| Field                      | Type     | Description                                  | Default Value | Required             |
-| :------------------------- | :------- | :------------------------------------------- | :------------ | :------------------- |
-| `notify.receivers[].name`  | `string` | Unique name of the receiver. Used in routes. |               | Yes                  |
-| `notify.receivers[].email` | `string` | Email address of the receiver.               |               | Yes (if using Email) |
+| Field                        | Type     | Description                                                              | Default Value | Required               |
+| :--------------------------- | :------- | :----------------------------------------------------------------------- | :------------ | :--------------------- |
+| `notify.receivers[].name`    | `string` | Unique name of the receiver. Used in routes.                             |               | Yes                    |
+| `notify.receivers[].email`   | `string` | Email address of the receiver.                                           |               | Yes (if using Email)   |
+| `notify.receivers[].webhook` | `object` | Webhook configuration for the receiver. E.g. `webhook: { "url": "xxx" }` |               | Yes (if using Webhook) |
 
 ### Notification Channel Configuration (`notify.channels`)
 

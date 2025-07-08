@@ -2,6 +2,8 @@ package rewrite
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -12,6 +14,7 @@ import (
 	"github.com/glidea/zenfeed/pkg/component"
 	"github.com/glidea/zenfeed/pkg/llm"
 	"github.com/glidea/zenfeed/pkg/model"
+	"github.com/glidea/zenfeed/pkg/storage/object"
 	"github.com/glidea/zenfeed/pkg/test"
 )
 
@@ -19,8 +22,9 @@ func TestLabels(t *testing.T) {
 	RegisterTestingT(t)
 
 	type givenDetail struct {
-		config  *Config
-		llmMock func(m *mock.Mock)
+		config            *Config
+		llmMock           func(m *mock.Mock)
+		objectStorageMock func(m *mock.Mock)
 	}
 	type whenDetail struct {
 		inputLabels model.Labels
@@ -173,7 +177,7 @@ func TestLabels(t *testing.T) {
 			},
 			ThenExpected: thenExpected{
 				outputLabels: nil,
-				err:          errors.New("transform text: llm completion: LLM failed"),
+				err:          errors.New("transform: llm completion: LLM failed"),
 				isErr:        true,
 			},
 		},
@@ -220,22 +224,163 @@ func TestLabels(t *testing.T) {
 				isErr: false,
 			},
 		},
+		{
+			Scenario: "Successfully generate podcast from content",
+			Given:    "a rule to convert content to a podcast with all dependencies mocked to succeed",
+			When:     "processing labels with content to be converted to a podcast",
+			Then:     "should return labels with a new podcast_url label",
+			GivenDetail: givenDetail{
+				config: &Config{
+					{
+						SourceLabel: model.LabelContent,
+						Transform: &Transform{
+							ToPodcast: &ToPodcast{
+								LLM:      "mock-llm-transcript",
+								TTSLLM:   "mock-llm-tts",
+								Speakers: []Speaker{{Name: "narrator", Voice: "alloy"}},
+							},
+						},
+						Action: ActionCreateOrUpdateLabel,
+						Label:  "podcast_url",
+					},
+				},
+				llmMock: func(m *mock.Mock) {
+					m.On("String", mock.Anything, mock.Anything).Return("This is the podcast script.", nil).Once()
+					m.On("WAV", mock.Anything, mock.Anything, mock.AnythingOfType("[]llm.Speaker")).
+						Return(io.NopCloser(strings.NewReader("fake audio data")), nil).Once()
+				},
+				objectStorageMock: func(m *mock.Mock) {
+					m.On("Put", mock.Anything, mock.AnythingOfType("string"), mock.Anything, "audio/wav").
+						Return("http://storage.example.com/podcast.wav", nil).Once()
+					m.On("Get", mock.Anything, mock.AnythingOfType("string")).Return("", object.ErrNotFound).Once()
+				},
+			},
+			WhenDetail: whenDetail{
+				inputLabels: model.Labels{
+					{Key: model.LabelContent, Value: "This is a long article to be converted into a podcast."},
+				},
+			},
+			ThenExpected: thenExpected{
+				outputLabels: model.Labels{
+					{Key: model.LabelContent, Value: "This is a long article to be converted into a podcast."},
+					{Key: "podcast_url", Value: "http://storage.example.com/podcast.wav"},
+				},
+				isErr: false,
+			},
+		},
+		{
+			Scenario: "Fail podcast generation due to transcription LLM error",
+			Given:    "a rule to convert content to a podcast, but the transcription LLM is mocked to fail",
+			When:     "processing labels",
+			Then:     "should return an error related to transcription failure",
+			GivenDetail: givenDetail{
+				config: &Config{
+					{
+						SourceLabel: model.LabelContent,
+						Transform: &Transform{
+							ToPodcast: &ToPodcast{LLM: "mock-llm-transcript", Speakers: []Speaker{{Name: "narrator", Voice: "alloy"}}},
+						},
+						Action: ActionCreateOrUpdateLabel, Label: "podcast_url",
+					},
+				},
+				llmMock: func(m *mock.Mock) {
+					m.On("String", mock.Anything, mock.Anything).Return("", errors.New("transcript failed")).Once()
+				},
+			},
+			WhenDetail: whenDetail{inputLabels: model.Labels{{Key: model.LabelContent, Value: "article"}}},
+			ThenExpected: thenExpected{
+				outputLabels: nil,
+				err:          errors.New("transform: generate podcast transcript: llm completion: transcript failed"),
+				isErr:        true,
+			},
+		},
+		{
+			Scenario: "Fail podcast generation due to TTS LLM error",
+			Given:    "a rule to convert content to a podcast, but the TTS LLM is mocked to fail",
+			When:     "processing labels",
+			Then:     "should return an error related to TTS failure",
+			GivenDetail: givenDetail{
+				config: &Config{
+					{
+						SourceLabel: model.LabelContent,
+						Transform: &Transform{
+							ToPodcast: &ToPodcast{LLM: "mock-llm-transcript", TTSLLM: "mock-llm-tts", Speakers: []Speaker{{Name: "narrator", Voice: "alloy"}}},
+						},
+						Action: ActionCreateOrUpdateLabel, Label: "podcast_url",
+					},
+				},
+				llmMock: func(m *mock.Mock) {
+					m.On("String", mock.Anything, mock.Anything).Return("script", nil).Once()
+					m.On("WAV", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("tts failed")).Once()
+				},
+				objectStorageMock: func(m *mock.Mock) {
+					m.On("Get", mock.Anything, mock.AnythingOfType("string")).Return("", object.ErrNotFound).Once()
+				},
+			},
+			WhenDetail: whenDetail{inputLabels: model.Labels{{Key: model.LabelContent, Value: "article"}}},
+			ThenExpected: thenExpected{
+				outputLabels: nil,
+				err:          errors.New("transform: generate podcast audio: calling tts llm: tts failed"),
+				isErr:        true,
+			},
+		},
+		{
+			Scenario: "Fail podcast generation due to object storage error",
+			Given:    "a rule to convert content to a podcast, but object storage is mocked to fail",
+			When:     "processing labels",
+			Then:     "should return an error related to storage failure",
+			GivenDetail: givenDetail{
+				config: &Config{
+					{
+						SourceLabel: model.LabelContent,
+						Transform: &Transform{
+							ToPodcast: &ToPodcast{LLM: "mock-llm-transcript", TTSLLM: "mock-llm-tts", Speakers: []Speaker{{Name: "narrator", Voice: "alloy"}}},
+						},
+						Action: ActionCreateOrUpdateLabel, Label: "podcast_url",
+					},
+				},
+				llmMock: func(m *mock.Mock) {
+					m.On("String", mock.Anything, mock.Anything).Return("script", nil).Once()
+					m.On("WAV", mock.Anything, mock.Anything, mock.Anything).Return(io.NopCloser(strings.NewReader("fake audio")), nil).Once()
+				},
+				objectStorageMock: func(m *mock.Mock) {
+					m.On("Put", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("storage failed")).Once()
+					m.On("Get", mock.Anything, mock.AnythingOfType("string")).Return("", object.ErrNotFound).Once()
+				},
+			},
+			WhenDetail: whenDetail{inputLabels: model.Labels{{Key: model.LabelContent, Value: "article"}}},
+			ThenExpected: thenExpected{
+				outputLabels: nil,
+				err:          errors.New("transform: store podcast audio: storage failed"),
+				isErr:        true,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.Scenario, func(t *testing.T) {
 			// Given.
 			var mockLLMFactory llm.Factory
-			var mockInstance *mock.Mock // Store the mock instance for assertion
-
-			// Create mock factory and capture the mock.Mock instance.
-			mockOption := component.MockOption(func(m *mock.Mock) {
-				mockInstance = m // Capture the mock instance.
+			var mockLLMInstance *mock.Mock
+			llmMockOption := component.MockOption(func(m *mock.Mock) {
+				mockLLMInstance = m
 				if tt.GivenDetail.llmMock != nil {
 					tt.GivenDetail.llmMock(m)
 				}
 			})
-			mockLLMFactory, err := llm.NewFactory("", nil, llm.FactoryDependencies{}, mockOption) // Use the factory directly with the option
+			mockLLMFactory, err := llm.NewFactory("", nil, llm.FactoryDependencies{}, llmMockOption)
+			Expect(err).NotTo(HaveOccurred())
+
+			var mockObjectStorage object.Storage
+			var mockObjectStorageInstance *mock.Mock
+			objectStorageMockOption := component.MockOption(func(m *mock.Mock) {
+				mockObjectStorageInstance = m
+				if tt.GivenDetail.objectStorageMock != nil {
+					tt.GivenDetail.objectStorageMock(m)
+				}
+			})
+			mockObjectStorageFactory := object.NewFactory(objectStorageMockOption)
+			mockObjectStorage, err = mockObjectStorageFactory.New("test", nil, object.Dependencies{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Manually validate config to compile regex and render templates.
@@ -252,7 +397,8 @@ func TestLabels(t *testing.T) {
 					Instance: "test",
 					Config:   tt.GivenDetail.config,
 					Dependencies: Dependencies{
-						LLMFactory: mockLLMFactory, // Pass the mock factory
+						LLMFactory:    mockLLMFactory, // Pass the mock factory
+						ObjectStorage: mockObjectStorage,
 					},
 				}),
 			}
@@ -280,10 +426,12 @@ func TestLabels(t *testing.T) {
 				Expect(outputLabels).To(Equal(tt.ThenExpected.outputLabels))
 			}
 
-			// Verify LLM calls if stubs were provided.
-			if tt.GivenDetail.llmMock != nil && mockInstance != nil {
-				// Assert expectations on the captured mock instance.
-				mockInstance.AssertExpectations(t)
+			// Verify mock calls if stubs were provided.
+			if tt.GivenDetail.llmMock != nil && mockLLMInstance != nil {
+				mockLLMInstance.AssertExpectations(t)
+			}
+			if tt.GivenDetail.objectStorageMock != nil && mockObjectStorageInstance != nil {
+				mockObjectStorageInstance.AssertExpectations(t)
 			}
 		})
 	}

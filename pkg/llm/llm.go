@@ -18,6 +18,7 @@ package llm
 import (
 	"bytes"
 	"context"
+	"io"
 	"reflect"
 	"strconv"
 	"sync"
@@ -42,19 +43,33 @@ import (
 // --- Interface code block ---
 type LLM interface {
 	component.Component
+	text
+	audio
+}
+
+type text interface {
 	String(ctx context.Context, messages []string) (string, error)
 	EmbeddingLabels(ctx context.Context, labels model.Labels) ([][]float32, error)
 	Embedding(ctx context.Context, text string) ([]float32, error)
 }
 
+type audio interface {
+	WAV(ctx context.Context, text string, speakers []Speaker) (io.ReadCloser, error)
+}
+
+type Speaker struct {
+	Name  string
+	Voice string
+}
+
 type Config struct {
-	Name                  string
-	Default               bool
-	Provider              ProviderType
-	Endpoint              string
-	APIKey                string
-	Model, EmbeddingModel string
-	Temperature           float32
+	Name                            string
+	Default                         bool
+	Provider                        ProviderType
+	Endpoint                        string
+	APIKey                          string
+	Model, EmbeddingModel, TTSModel string
+	Temperature                     float32
 }
 
 type ProviderType string
@@ -72,7 +87,7 @@ var defaultEndpoints = map[ProviderType]string{
 	ProviderTypeOpenAI:      "https://api.openai.com/v1",
 	ProviderTypeOpenRouter:  "https://openrouter.ai/api/v1",
 	ProviderTypeDeepSeek:    "https://api.deepseek.com/v1",
-	ProviderTypeGemini:      "https://generativelanguage.googleapis.com/v1beta/openai",
+	ProviderTypeGemini:      "https://generativelanguage.googleapis.com/v1beta",
 	ProviderTypeVolc:        "https://ark.cn-beijing.volces.com/api/v3",
 	ProviderTypeSiliconFlow: "https://api.siliconflow.cn/v1",
 }
@@ -97,8 +112,8 @@ func (c *Config) Validate() error { //nolint:cyclop
 	if c.APIKey == "" {
 		return errors.New("api key is required")
 	}
-	if c.Model == "" && c.EmbeddingModel == "" {
-		return errors.New("model or embedding model is required")
+	if c.Model == "" && c.EmbeddingModel == "" && c.TTSModel == "" {
+		return errors.New("model or embedding model or tts model is required")
 	}
 	if c.Temperature < 0 || c.Temperature > 2 {
 		return errors.Errorf("invalid temperature: %f, should be in range [0, 2]", c.Temperature)
@@ -182,6 +197,7 @@ func (c *FactoryConfig) From(app *config.App) {
 			APIKey:         llm.APIKey,
 			Model:          llm.Model,
 			EmbeddingModel: llm.EmbeddingModel,
+			TTSModel:       llm.TTSModel,
 			Temperature:    llm.Temperature,
 		})
 	}
@@ -207,12 +223,9 @@ func NewFactory(
 ) (Factory, error) {
 	if len(mockOn) > 0 {
 		mf := &mockFactory{}
-		getCall := mf.On("Get", mock.Anything)
-		getCall.Run(func(args mock.Arguments) {
-			m := &mockLLM{}
-			component.MockOptions(mockOn).Apply(&m.Mock)
-			getCall.Return(m, nil)
-		})
+		m := &mockLLM{}
+		component.MockOptions(mockOn).Apply(&m.Mock)
+		mf.On("Get", mock.Anything).Return(m)
 		mf.On("Reload", mock.Anything).Return(nil)
 
 		return mf, nil
@@ -307,11 +320,6 @@ func (f *factory) Get(name string) LLM {
 			continue
 		}
 
-		if f.llms[name] == nil {
-			llm := f.new(&llmC)
-			f.llms[name] = llm
-		}
-
 		return f.llms[name]
 	}
 
@@ -320,8 +328,12 @@ func (f *factory) Get(name string) LLM {
 
 func (f *factory) new(c *Config) LLM {
 	switch c.Provider {
-	case ProviderTypeOpenAI, ProviderTypeOpenRouter, ProviderTypeDeepSeek, ProviderTypeGemini, ProviderTypeVolc, ProviderTypeSiliconFlow: //nolint:lll
+	case ProviderTypeOpenAI, ProviderTypeOpenRouter, ProviderTypeDeepSeek, ProviderTypeVolc, ProviderTypeSiliconFlow: //nolint:lll
 		return newCached(newOpenAI(c), f.Dependencies().KVStorage)
+
+	case ProviderTypeGemini:
+		return newCached(newGemini(c), f.Dependencies().KVStorage)
+
 	default:
 		return newCached(newOpenAI(c), f.Dependencies().KVStorage)
 	}
@@ -333,14 +345,17 @@ func (f *factory) initLLMs() {
 		llms       = make(map[string]LLM, len(config.LLMs))
 		defaultLLM LLM
 	)
+
 	for _, llmC := range config.LLMs {
 		llm := f.new(&llmC)
+
 		llms[llmC.Name] = llm
 
 		if llmC.Name == config.defaultLLM {
 			defaultLLM = llm
 		}
 	}
+
 	f.llms = llms
 	f.defaultLLM = defaultLLM
 }
@@ -482,12 +497,27 @@ func (m *mockLLM) String(ctx context.Context, messages []string) (string, error)
 
 func (m *mockLLM) EmbeddingLabels(ctx context.Context, labels model.Labels) ([][]float32, error) {
 	args := m.Called(ctx, labels)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
 
 	return args.Get(0).([][]float32), args.Error(1)
 }
 
 func (m *mockLLM) Embedding(ctx context.Context, text string) ([]float32, error) {
 	args := m.Called(ctx, text)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
 
 	return args.Get(0).([]float32), args.Error(1)
+}
+
+func (m *mockLLM) WAV(ctx context.Context, text string, speakers []Speaker) (io.ReadCloser, error) {
+	args := m.Called(ctx, text, speakers)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).(io.ReadCloser), args.Error(1)
 }

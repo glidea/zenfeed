@@ -47,6 +47,7 @@ import (
 	"github.com/glidea/zenfeed/pkg/storage/feed/block/index/primary"
 	"github.com/glidea/zenfeed/pkg/storage/feed/block/index/vector"
 	"github.com/glidea/zenfeed/pkg/storage/kv"
+	"github.com/glidea/zenfeed/pkg/storage/object"
 	"github.com/glidea/zenfeed/pkg/telemetry/log"
 	telemetryserver "github.com/glidea/zenfeed/pkg/telemetry/server"
 	timeutil "github.com/glidea/zenfeed/pkg/util/time"
@@ -122,18 +123,19 @@ type App struct {
 	conf       *config.App
 	telemetry  telemetryserver.Server
 
-	kvStorage   kv.Storage
-	llmFactory  llm.Factory
-	rewriter    rewrite.Rewriter
-	feedStorage feed.Storage
-	api         api.API
-	http        http.Server
-	mcp         mcp.Server
-	rss         rss.Server
-	scraperMgr  scrape.Manager
-	scheduler   schedule.Scheduler
-	notifier    notify.Notifier
-	notifyChan  chan *rule.Result
+	kvStorage     kv.Storage
+	llmFactory    llm.Factory
+	rewriter      rewrite.Rewriter
+	feedStorage   feed.Storage
+	objectStorage object.Storage
+	api           api.API
+	http          http.Server
+	mcp           mcp.Server
+	rss           rss.Server
+	scraperMgr    scrape.Manager
+	scheduler     schedule.Scheduler
+	notifier      notify.Notifier
+	notifyChan    chan *rule.Result
 }
 
 // newApp creates a new application instance.
@@ -163,6 +165,9 @@ func (a *App) setup() error {
 
 	if err := a.setupKVStorage(); err != nil {
 		return errors.Wrap(err, "setup kv storage")
+	}
+	if err := a.setupObjectStorage(); err != nil {
+		return errors.Wrap(err, "setup object storage")
 	}
 	if err := a.setupLLMFactory(); err != nil {
 		return errors.Wrap(err, "setup llm factory")
@@ -251,7 +256,8 @@ func (a *App) setupLLMFactory() (err error) {
 // setupRewriter initializes the Rewriter factory.
 func (a *App) setupRewriter() (err error) {
 	a.rewriter, err = rewrite.NewFactory().New(component.Global, a.conf, rewrite.Dependencies{
-		LLMFactory: a.llmFactory,
+		LLMFactory:    a.llmFactory,
+		ObjectStorage: a.objectStorage,
 	})
 	if err != nil {
 		return err
@@ -278,6 +284,18 @@ func (a *App) setupFeedStorage() (err error) {
 	}
 
 	a.configMgr.Subscribe(a.feedStorage)
+
+	return nil
+}
+
+// setupObjectStorage initializes the Object storage.
+func (a *App) setupObjectStorage() (err error) {
+	a.objectStorage, err = object.NewFactory().New(component.Global, a.conf, object.Dependencies{})
+	if err != nil {
+		return err
+	}
+
+	a.configMgr.Subscribe(a.objectStorage)
 
 	return nil
 }
@@ -419,7 +437,7 @@ func (a *App) run(ctx context.Context) error {
 	log.Info(ctx, "starting application components...")
 	if err := component.Run(ctx,
 		component.Group{a.configMgr},
-		component.Group{a.llmFactory, a.telemetry},
+		component.Group{a.llmFactory, a.objectStorage, a.telemetry},
 		component.Group{a.rewriter},
 		component.Group{a.feedStorage},
 		component.Group{a.kvStorage},

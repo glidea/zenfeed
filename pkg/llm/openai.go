@@ -18,6 +18,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"io"
 
 	"github.com/pkg/errors"
 	oai "github.com/sashabaranov/go-openai"
@@ -31,9 +32,7 @@ import (
 
 type openai struct {
 	*component.Base[Config, struct{}]
-
-	client           *oai.Client
-	embeddingSpliter embeddingSpliter
+	text
 }
 
 func newOpenAI(c *Config) LLM {
@@ -42,18 +41,34 @@ func newOpenAI(c *Config) LLM {
 	client := oai.NewClientWithConfig(config)
 	embeddingSpliter := newEmbeddingSpliter(1536, 64)
 
+	base := component.New(&component.BaseConfig[Config, struct{}]{
+		Name:     "LLM/openai",
+		Instance: c.Name,
+		Config:   c,
+	})
+
 	return &openai{
-		Base: component.New(&component.BaseConfig[Config, struct{}]{
-			Name:     "LLM/openai",
-			Instance: c.Name,
-			Config:   c,
-		}),
-		client:           client,
-		embeddingSpliter: embeddingSpliter,
+		Base: base,
+		text: &openaiText{
+			Base:             base,
+			client:           client,
+			embeddingSpliter: embeddingSpliter,
+		},
 	}
 }
 
-func (o *openai) String(ctx context.Context, messages []string) (value string, err error) {
+func (o *openai) WAV(ctx context.Context, text string, speakers []Speaker) (r io.ReadCloser, err error) {
+	return nil, errors.New("not supported")
+}
+
+type openaiText struct {
+	*component.Base[Config, struct{}]
+
+	client           *oai.Client
+	embeddingSpliter embeddingSpliter
+}
+
+func (o *openaiText) String(ctx context.Context, messages []string) (value string, err error) {
 	ctx = telemetry.StartWith(ctx, append(o.TelemetryLabels(), telemetrymodel.KeyOperation, "String")...)
 	defer func() { telemetry.End(ctx, err) }()
 
@@ -91,7 +106,7 @@ func (o *openai) String(ctx context.Context, messages []string) (value string, e
 	return resp.Choices[0].Message.Content, nil
 }
 
-func (o *openai) EmbeddingLabels(ctx context.Context, labels model.Labels) (value [][]float32, err error) {
+func (o *openaiText) EmbeddingLabels(ctx context.Context, labels model.Labels) (value [][]float32, err error) {
 	ctx = telemetry.StartWith(ctx, append(o.TelemetryLabels(), telemetrymodel.KeyOperation, "EmbeddingLabels")...)
 	defer func() { telemetry.End(ctx, err) }()
 
@@ -117,7 +132,7 @@ func (o *openai) EmbeddingLabels(ctx context.Context, labels model.Labels) (valu
 	return vecs, nil
 }
 
-func (o *openai) Embedding(ctx context.Context, s string) (value []float32, err error) {
+func (o *openaiText) Embedding(ctx context.Context, s string) (value []float32, err error) {
 	ctx = telemetry.StartWith(ctx, append(o.TelemetryLabels(), telemetrymodel.KeyOperation, "Embedding")...)
 	defer func() { telemetry.End(ctx, err) }()
 

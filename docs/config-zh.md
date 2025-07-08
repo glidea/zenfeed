@@ -41,6 +41,7 @@
 | `llms[].api_key`         | `string`  | LLM 的 API 密钥。                                                                                                                                                                            |                    | 是                                             |
 | `llms[].model`           | `string`  | LLM 的模型。例如 `gpt-4o-mini`。如果用于生成任务 (如总结)，则不能为空。如果此 LLM 被使用，则不能与 `embedding_model` 同时为空。                                                              |                    | 条件性必需                                     |
 | `llms[].embedding_model` | `string`  | LLM 的 Embedding 模型。例如 `text-embedding-3-small`。如果用于 Embedding，则不能为空。如果此 LLM 被使用，则不能与 `model` 同时为空。**注意：** 初次使用后请勿直接修改，应添加新的 LLM 配置。 |                    | 条件性必需                                     |
+| `llms[].tts_model`       | `string`  | LLM 的文本转语音 (TTS) 模型。                                                                                                                                                                |                    | 否                                             |
 | `llms[].temperature`     | `float32` | LLM 的温度 (0-2)。                                                                                                                                                                           | `0.0`              | 否                                             |
 
 ### Jina AI 配置 (`jina`)
@@ -80,10 +81,11 @@
 
 ### 存储配置 (`storage`)
 
-| 字段           | 类型     | 描述                                          | 默认值       | 是否必需 |
-| :------------- | :------- | :-------------------------------------------- | :----------- | :------- |
-| `storage.dir`  | `string` | 所有存储的基础目录。应用运行后不可更改。      | `./data`     | 否       |
-| `storage.feed` | `object` | Feed 存储配置。详见下方的 **Feed 存储配置**。 | (见具体字段) | 否       |
+| 字段             | 类型     | 描述                                                            | 默认值       | 是否必需 |
+| :--------------- | :------- | :-------------------------------------------------------------- | :----------- | :------- |
+| `storage.dir`    | `string` | 所有存储的基础目录。应用运行后不可更改。                        | `./data`     | 否       |
+| `storage.feed`   | `object` | Feed 存储配置。详见下方的 **Feed 存储配置**。                   | (见具体字段) | 否       |
+| `storage.object` | `object` | 对象存储配置，用于存储播客等文件。详见下方的 **对象存储配置**。 | (见具体字段) | 否       |
 
 ### Feed 存储配置 (`storage.feed`)
 
@@ -94,6 +96,16 @@
 | `storage.feed.embedding_llm`  | `string`        | 用于 Feed Embedding 的 LLM 名称 (来自 `llms` 部分)。显著影响语义搜索的准确性。**注意：** 如果要切换，请注意保留旧的 LLM 配置，因为过去的数据仍隐式关联它，否则会导致过去的数据无法进行语义搜索。 | `llms` 部分中的默认 LLM | 否       |
 | `storage.feed.retention`      | `time.Duration` | Feed 的保留时长。                                                                                                                                                                                | `8d`                    | 否       |
 | `storage.feed.block_duration` | `time.Duration` | 每个基于时间的 Feed 存储块的保留时长 (类似于 Prometheus TSDB Block)。                                                                                                                            | `25h`                   | 否       |
+
+### 对象存储配置 (`storage.object`)
+
+| 字段                               | 类型     | 描述                           | 默认值 | 是否必需              |
+| :--------------------------------- | :------- | :----------------------------- | :----- | :-------------------- |
+| `storage.object.endpoint`          | `string` | 对象存储的端点。               |        | 是 (如果使用播客功能) |
+| `storage.object.access_key_id`     | `string` | 对象存储的 Access Key ID。     |        | 是 (如果使用播客功能) |
+| `storage.object.secret_access_key` | `string` | 对象存储的 Secret Access Key。 |        | 是 (如果使用播客功能) |
+| `storage.object.bucket`            | `string` | 对象存储的存储桶名称。         |        | 是 (如果使用播客功能) |
+| `storage.object.bucket_url`        | `string` | 对象存储的桶访问 URL。       |        | 否                    |
 
 ### 重写规则配置 (`storage.feed.rewrites[]`)
 
@@ -109,12 +121,8 @@
 | `...rewrites[].match_re`                 | `string`     | 用于匹配 (转换后) 文本的正则表达式。                                                                                                                                 | `.*` (匹配所有)          | 否 (使用 `match` 或 `match_re`)                |
 | `...rewrites[].action`                   | `string`     | 匹配时执行的操作: `create_or_update_label` (使用匹配/转换后的文本添加/更新标签), `drop_feed` (完全丢弃该 Feed)。                                                     | `create_or_update_label` | 否                                             |
 | `...rewrites[].label`                    | `string`     | 要创建或更新的 Feed 标签名称。                                                                                                                                       |                          | 是 (如果 `action` 是 `create_or_update_label`) |
-
-### 重写规则转换配置 (`storage.feed.rewrites[].transform`)
-
-| 字段                   | 类型     | 描述                                                                 | 默认值 | 是否必需 |
-| :--------------------- | :------- | :------------------------------------------------------------------- | :----- | :------- |
-| `...transform.to_text` | `object` | 使用 LLM 将源文本转换为文本。详见下方的 **重写规则转换为文本配置**。 | `nil`  | 否       |
+| `...transform.to_text`                   | `object`     | 使用 LLM 将源文本转换为文本。详见下方的 **重写规则转换为文本配置**。                                                                                                 | `nil`                    | 否                                             |
+| `...transform.to_podcast`                | `object`     | 将源文本转换为播客。详见下方的 **重写规则转换为播客配置**。                                                                                                          | `nil`                    | 否                                             |
 
 ### 重写规则转换为文本配置 (`storage.feed.rewrites[].transform.to_text`)
 
@@ -125,6 +133,25 @@
 | `...to_text.type`   | `string` | 转换的类型。可选值：<ul><li>`prompt` (默认): 使用 LLM 和指定的 Prompt 转换源文本。</li><li>`crawl`: 将源文本视为 URL，直接抓取该 URL 指向的网页内容，并将其转换为 Markdown 格式。此方式为本地抓取，会尝试遵循 `robots.txt`。</li><li>`crawl_by_jina`: 将源文本视为 URL，通过 [Jina AI Reader API](https://jina.ai/reader/) 抓取和处理网页内容，并返回 Markdown。功能可能更强大，例如处理动态页面，但依赖 Jina AI 服务。</li></ul> | `prompt`                | 否                           |
 | `...to_text.llm`    | `string` | **仅当 `type` 为 `prompt` 时有效。** 用于转换的 LLM 名称 (来自 `llms` 部分)。如果未指定，将使用在 `llms` 部分中标记为 `default: true` 的 LLM。                                                                                                                                                                                                                                                                                    | `llms` 部分中的默认 LLM | 否                           |
 | `...to_text.prompt` | `string` | **仅当 `type` 为 `prompt` 时有效。** 用于转换的 Prompt。源文本将被注入。可以使用 Go 模板语法引用内置 Prompt: `{{ .summary }}`, `{{ .category }}`, `{{ .tags }}`, `{{ .score }}`, `{{ .comment_confucius }}`, `{{ .summary_html_snippet }}`, `{{ .summary_html_snippet_for_small_model }}`。                                                                                                                                       |                         | 是 (如果 `type` 是 `prompt`) |
+
+### 重写规则转换为播客配置 (`storage.feed.rewrites[].transform.to_podcast`)
+
+此配置定义了如何将 `source_label` 的文本转换为播客。
+
+| 字段                                         | 类型       | 描述                                                                                                      | 默认值                  | 是否必需 |
+| :------------------------------------------- | :--------- | :-------------------------------------------------------------------------------------------------------- | :---------------------- | :------- |
+| `...to_podcast.llm`                          | `string`   | 用于生成播客稿件的 LLM 名称 (来自 `llms` 部分)。                                                          | `llms` 部分中的默认 LLM | 否       |
+| `...to_podcast.transcript_additional_prompt` | `string`   | 附加到播客稿件生成 Prompt 的额外指令。                                                                    |                         | 否       |
+| `...to_podcast.tts_llm`                      | `string`   | 用于文本转语音 (TTS) 的 LLM 名称 (来自 `llms` 部分)。**注意：目前仅支持 `provider` 为 `gemini` 的 LLM**。 | `llms` 部分中的默认 LLM | 否       |
+| `...to_podcast.speakers`                     | `对象列表` | 播客的演讲者列表。详见下方的 **演讲者配置**。                                                             | `[]`                    | 是       |
+
+#### 演讲者配置 (`...to_podcast.speakers[]`)
+
+| 字段                  | 类型     | 描述                      | 默认值 | 是否必需 |
+| :-------------------- | :------- | :------------------------ | :----- | :------- |
+| `...speakers[].name`  | `string` | 演讲者的名字。            |        | 是       |
+| `...speakers[].role`  | `string` | 演讲者的角色描述 (人设)。 |        | 否       |
+| `...speakers[].voice` | `string` | 演讲者的声音。            |        | 是       |
 
 ### 调度配置 (`scheduls`)
 
@@ -173,10 +200,11 @@
 
 定义*谁*接收通知。
 
-| 字段                       | 类型     | 描述                             | 默认值 | 是否必需            |
-| :------------------------- | :------- | :------------------------------- | :----- | :------------------ |
-| `notify.receivers[].name`  | `string` | 接收者的唯一名称。在路由中使用。 |        | 是                  |
-| `notify.receivers[].email` | `string` | 接收者的电子邮件地址。           |        | 是 (如果使用 Email) |
+| 字段                         | 类型     | 描述                                                     | 默认值 | 是否必需              |
+| :--------------------------- | :------- | :------------------------------------------------------- | :----- | :-------------------- |
+| `notify.receivers[].name`    | `string` | 接收者的唯一名称。在路由中使用。                         |        | 是                    |
+| `notify.receivers[].email`   | `string` | 接收者的电子邮件地址。                                   |        | 是 (如果使用 Email)   |
+| `notify.receivers[].webhook` | `object` | 接收者的 Webhook 配置。例如: `webhook: { "url": "xxx" }` |        | 是 (如果使用 Webhook) |
 
 ### 通知渠道配置 (`notify.channels`)
 

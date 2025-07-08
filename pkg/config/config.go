@@ -90,6 +90,7 @@ type LLM struct {
 	APIKey         string  `yaml:"api_key,omitempty" json:"api_key,omitempty" desc:"The API key of the LLM. It is required when api.llm is set."`
 	Model          string  `yaml:"model,omitempty" json:"model,omitempty" desc:"The model of the LLM. e.g. gpt-4o-mini. Can not be empty with embedding_model at same time when api.llm is set."`
 	EmbeddingModel string  `yaml:"embedding_model,omitempty" json:"embedding_model,omitempty" desc:"The embedding model of the LLM. e.g. text-embedding-3-small. Can not be empty with model at same time when api.llm is set. NOTE: Once used, do not modify it directly, instead, add a new LLM configuration."`
+	TTSModel       string  `yaml:"tts_model,omitempty" json:"tts_model,omitempty" desc:"The TTS model of the LLM."`
 	Temperature    float32 `yaml:"temperature,omitempty" json:"temperature,omitempty" desc:"The temperature (0-2) of the LLM. Default: 0.0"`
 }
 
@@ -101,8 +102,9 @@ type Scrape struct {
 }
 
 type Storage struct {
-	Dir  string      `yaml:"dir,omitempty" json:"dir,omitempty" desc:"The base directory of the all storages. Default: ./data. It can not be changed after the app is running."`
-	Feed FeedStorage `yaml:"feed,omitempty" json:"feed,omitempty" desc:"The feed storage config."`
+	Dir    string        `yaml:"dir,omitempty" json:"dir,omitempty" desc:"The base directory of the all storages. Default: ./data. It can not be changed after the app is running."`
+	Feed   FeedStorage   `yaml:"feed,omitempty" json:"feed,omitempty" desc:"The feed storage config."`
+	Object ObjectStorage `yaml:"object,omitempty" json:"object,omitempty" desc:"The object storage config."`
 }
 
 type FeedStorage struct {
@@ -111,6 +113,14 @@ type FeedStorage struct {
 	EmbeddingLLM  string            `yaml:"embedding_llm,omitempty" json:"embedding_llm,omitempty" desc:"The embedding LLM for the feed storage. It will significantly affect the accuracy of semantic search, please be careful to choose. If you want to switch, please note to keep the old llm configuration, because the past data is still implicitly associated with it, otherwise it will cause the past data to be unable to be semantically searched. Default is the default LLM in llms section."`
 	Retention     timeutil.Duration `yaml:"retention,omitempty" json:"retention,omitempty" desc:"How long to keep a feed. Default: 8d"`
 	BlockDuration timeutil.Duration `yaml:"block_duration,omitempty" json:"block_duration,omitempty" desc:"How long to keep the feed storage block. Block is time-based, like Prometheus TSDB Block. Default: 25h"`
+}
+
+type ObjectStorage struct {
+	Endpoint        string `yaml:"endpoint,omitempty" json:"endpoint,omitempty" desc:"The endpoint of the object storage."`
+	AccessKeyID     string `yaml:"access_key_id,omitempty" json:"access_key_id,omitempty" desc:"The access key id of the object storage."`
+	SecretAccessKey string `yaml:"secret_access_key,omitempty" json:"secret_access_key,omitempty" desc:"The secret access key of the object storage."`
+	Bucket          string `yaml:"bucket,omitempty" json:"bucket,omitempty" desc:"The bucket of the object storage."`
+	BucketURL       string `yaml:"bucket_url,omitempty" json:"bucket_url,omitempty" desc:"The public URL of the object storage bucket."`
 }
 
 type ScrapeSource struct {
@@ -137,13 +147,28 @@ type RewriteRule struct {
 }
 
 type RewriteRuleTransform struct {
-	ToText *RewriteRuleTransformToText `yaml:"to_text,omitempty" json:"to_text,omitempty" desc:"The transform config to transform the source text to text."`
+	ToText    *RewriteRuleTransformToText    `yaml:"to_text,omitempty" json:"to_text,omitempty" desc:"The transform config to transform the source text to text."`
+	ToPodcast *RewriteRuleTransformToPodcast `yaml:"to_podcast,omitempty" json:"to_podcast,omitempty" desc:"The transform config to transform the source text to podcast."`
 }
 
 type RewriteRuleTransformToText struct {
 	Type   string `yaml:"type,omitempty" json:"type,omitempty" desc:"The type of the transform. It can be one of prompt, crawl, crawl_by_jina. Default is prompt. For crawl, the source text will be as the url to crawl the page, and the page will be converted to markdown. crawl vs crawl_by_jina: crawl is local, more stable; crawl_by_jina is powered by https://jina.ai, more powerful."`
 	LLM    string `yaml:"llm,omitempty" json:"llm,omitempty" desc:"The LLM name to use. Default is the default LLM in llms section."`
 	Prompt string `yaml:"prompt,omitempty" json:"prompt,omitempty" desc:"The prompt to transform the source text. The source text will be injected into the prompt above. And you can use go template syntax to refer some built-in prompts, like {{ .summary }}. Available built-in prompts: category, tags, score, comment_confucius, summary, summary_html_snippet."`
+}
+
+type RewriteRuleTransformToPodcast struct {
+	LLM                        string                                 `yaml:"llm,omitempty" json:"llm,omitempty" desc:"The LLM name to use. Default is the default LLM in llms section."`
+	EstimateMaximumDuration    timeutil.Duration                      `yaml:"estimate_maximum_duration,omitempty" json:"estimate_maximum_duration,omitempty" desc:"The estimated maximum duration of the podcast. It will affect the length of the generated transcript. e.g. 5m. Default is 5m."`
+	TranscriptAdditionalPrompt string                                 `yaml:"transcript_additional_prompt,omitempty" json:"transcript_additional_prompt,omitempty" desc:"The additional prompt to add to the transcript. It is optional."`
+	TTSLLM                     string                                 `yaml:"tts_llm,omitempty" json:"tts_llm,omitempty" desc:"The LLM name to use for TTS. Only supports gemini now. Default is the default LLM in llms section."`
+	Speakers                   []RewriteRuleTransformToPodcastSpeaker `yaml:"speakers,omitempty" json:"speakers,omitempty" desc:"The speakers to use. It is required, at least one speaker is needed."`
+}
+
+type RewriteRuleTransformToPodcastSpeaker struct {
+	Name  string `yaml:"name,omitempty" json:"name,omitempty" desc:"The name of the speaker. It is required."`
+	Role  string `yaml:"role,omitempty" json:"role,omitempty" desc:"The role description of the speaker. You can think of it as a character setting."`
+	Voice string `yaml:"voice,omitempty" json:"voice,omitempty" desc:"The voice of the speaker. It is required."`
 }
 
 type SchedulsRule struct {

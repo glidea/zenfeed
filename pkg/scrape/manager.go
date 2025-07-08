@@ -216,6 +216,10 @@ func (m *manager) reload(config *Config) (err error) {
 func (m *manager) runOrRestartScrapers(config *Config, newScrapers map[string]scraper.Scraper) error {
 	for i := range config.Scrapers {
 		c := &config.Scrapers[i]
+		if err := c.Validate(); err != nil {
+			return errors.Wrapf(err, "validate scraper %s", c.Name)
+		}
+
 		if err := m.runOrRestartScraper(c, newScrapers); err != nil {
 			return errors.Wrapf(err, "run or restart scraper %s", c.Name)
 		}

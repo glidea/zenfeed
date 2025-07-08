@@ -244,7 +244,7 @@ func TestNew(t *testing.T) {
 			WhenDetail: whenDetail{},
 			ThenExpected: thenExpected{
 				isErr:      true,
-				wantErrMsg: "creating source: invalid RSS config: URL must be a valid HTTP/HTTPS URL", // Error from newRSSReader via newReader
+				wantErrMsg: "invalid RSS config: URL must be a valid HTTP/HTTPS URL", // Error from newRSSReader via newReader
 			},
 		},
 		{
@@ -264,7 +264,7 @@ func TestNew(t *testing.T) {
 			WhenDetail: whenDetail{},
 			ThenExpected: thenExpected{
 				isErr:      true,
-				wantErrMsg: "creating source: source not supported", // Error from newReader
+				wantErrMsg: "source not supported", // Error from newReader
 			},
 		},
 	}

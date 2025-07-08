@@ -69,6 +69,11 @@ func (c *Config) Validate() error {
 	if c.Name == "" {
 		return errors.New("name cannot be empty")
 	}
+	if c.RSS != nil {
+		if err := c.RSS.Validate(); err != nil {
+			return errors.Wrap(err, "invalid RSS config")
+		}
+	}
 
 	return nil
 }

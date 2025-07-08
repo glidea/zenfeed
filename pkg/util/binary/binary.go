@@ -122,6 +122,32 @@ func ReadUint32(r io.Reader) (uint32, error) {
 	return binary.LittleEndian.Uint32(b), nil
 }
 
+// WriteUint16 writes a uint16 using a pooled buffer.
+func WriteUint16(w io.Writer, v uint16) error {
+	bp := smallBufPool.Get().(*[]byte)
+	defer smallBufPool.Put(bp)
+	b := *bp
+
+	binary.LittleEndian.PutUint16(b, v)
+	_, err := w.Write(b[:2])
+
+	return err
+}
+
+// ReadUint16 reads a uint16 using a pooled buffer.
+func ReadUint16(r io.Reader) (uint16, error) {
+	bp := smallBufPool.Get().(*[]byte)
+	defer smallBufPool.Put(bp)
+	b := (*bp)[:2]
+
+	// Read exactly 2 bytes into the slice.
+	if _, err := io.ReadFull(r, b); err != nil {
+		return 0, errors.Wrap(err, "read uint16")
+	}
+
+	return binary.LittleEndian.Uint16(b), nil
+}
+
 // WriteFloat32 writes a float32 using a pooled buffer.
 func WriteFloat32(w io.Writer, v float32) error {
 	return WriteUint32(w, math.Float32bits(v))
