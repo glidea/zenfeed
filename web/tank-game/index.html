@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>坦克大战 - Tank Battle</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 坦克大战 Tank Battle</h1>
+        </header>
+
+        <div class="game-wrapper">
+            <div class="info-panel">
+                <div class="info-item">
+                    <span class="label">生命值 Lives:</span>
+                    <span id="lives" class="value">3</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">得分 Score:</span>
+                    <span id="score" class="value">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">敌军 Enemies:</span>
+                    <span id="enemies" class="value">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">关卡 Level:</span>
+                    <span id="level" class="value">1</span>
+                </div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="gameCanvas"></canvas>
+                <div id="gameOverlay" class="overlay hidden">
+                    <div class="overlay-content">
+                        <h2 id="overlayTitle"></h2>
+                        <p id="overlayMessage"></p>
+                        <button id="restartButton" class="btn">重新开始 Restart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-info">
+            <h3>游戏说明 Game Instructions</h3>
+            <div class="controls-grid">
+                <div class="control-item">
+                    <span class="key">↑ ↓ ← →</span>
+                    <span class="desc">移动坦克 Move Tank</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">Space</span>
+                    <span class="desc">发射子弹 Fire</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">P</span>
+                    <span class="desc">暂停/继续 Pause</span>
+                </div>
+            </div>
+            
+            <div class="game-rules">
+                <h4>游戏目标 Objectives</h4>
+                <ul>
+                    <li>🎯 消灭所有敌方坦克 Destroy all enemy tanks</li>
+                    <li>🏠 保护基地不被摧毁 Protect your base</li>
+                    <li>❤️ 保持生命值不归零 Keep your lives above zero</li>
+                    <li>⭐ 每关消灭所有敌人进入下一关 Clear each level to advance</li>
+                </ul>
+                
+                <h4>游戏元素 Game Elements</h4>
+                <ul>
+                    <li>🟦 <strong>玩家坦克 (蓝色)</strong> - 你控制的坦克 Your tank</li>
+                    <li>🟥 <strong>敌方坦克 (红色)</strong> - 自动移动和射击的敌人 Enemy AI tanks</li>
+                    <li>🟨 <strong>子弹 (黄色)</strong> - 坦克发射的弹药 Bullets</li>
+                    <li>🟫 <strong>砖墙 (棕色)</strong> - 可被摧毁的障碍物 Destructible walls</li>
+                    <li>⬛ <strong>钢墙 (灰色)</strong> - 坚不可摧的墙 Indestructible walls</li>
+                    <li>🏠 <strong>基地 (绿色)</strong> - 必须保护的目标 Your base to protect</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
