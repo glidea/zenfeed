@@ -2,11 +2,11 @@
 
 <img width="400" height="200" alt="4ca65f573c3d7b3dec0cd829d86262f6" src="https://github.com/user-attachments/assets/9fcffadc-2b95-411d-b778-bf33809f7ef7" />
 
-感谢 [Claude API](https://www.claudeapi.com?source=banana) 赞助本项目！Claude API 是专注 Claude 模型的官方渠道 API 服务商，基于 Anthropic 官方 Key 与 AWS Bedrock 官方渠道，提供稳定的 Claude Code 与 Agent 应用接入体验，支持 Claude 全系列模型，保留 Tool Use、长上下文等官方能力。服务非逆向、非降智，适合 Claude Code 深度用户、Agent 工程师与企业技术团队使用。通过[专属链接](https://www.claudeapi.com?source=banana)注册后联系客服，可领取免费测试额度，并支持开票和团队对接。
+感谢 [Claude API](https://www.claudeapi.com?source=zenfeed) 赞助本项目！Claude API 是专注 Claude 模型的官方渠道 API 服务商，基于 Anthropic 官方 Key 与 AWS Bedrock 官方渠道，提供稳定的 Claude Code 与 Agent 应用接入体验，支持 Claude 全系列模型，保留 Tool Use、长上下文等官方能力。服务非逆向、非降智，适合 Claude Code 深度用户、Agent 工程师与企业技术团队使用。通过[专属链接](https://www.claudeapi.com?source=zenfeed)注册后联系客服，可领取免费测试额度，并支持开票和团队对接。
 
 <img width="400" height="200" alt="33f1d0d49cce103272da3821f66a2820" src="https://github.com/user-attachments/assets/fd909546-1544-4b7d-a7c1-67244d729e4f" />
 
-本项目由 [code0.ai](https://code0.ai?source=banana) 赞助 —— 一站接入 gpt-image / Gemini / Claude 等主流 AI 模型，稳定不掉线，按量计费即充即用，专为 AI 创作者打造。注册后联系客服可免费领取测试额度，支持企业对接及开票。
+本项目由 [code0.ai](https://code0.ai?source=zenfeed) 赞助 —— 一站接入 gpt-image / Gemini / Claude 等主流 AI 模型，稳定不掉线，按量计费即充即用，专为 AI 创作者打造。注册后联系客服可免费领取测试额度，支持企业对接及开票。
 
 ---
 
