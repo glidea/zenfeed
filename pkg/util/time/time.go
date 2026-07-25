@@ -18,7 +18,7 @@ package time
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 	_ "time/tzdata"
 

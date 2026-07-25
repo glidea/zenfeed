@@ -390,29 +390,34 @@ func (n *notifier) sendWorker(i int) {
 		case <-n.Context().Done():
 			return
 		case work := <-n.channelSendWork:
-			workCtx := telemetry.StartWith(n.Context(),
-				append(n.TelemetryLabels(),
-					telemetrymodel.KeyOperation, "Run",
-					"worker", i,
-					"group", work.group.Name,
-					"time", timeutil.Format(work.group.Time),
-					"receiver", work.receiver.Name,
-				)...,
-			)
-			defer func() { telemetry.End(workCtx, nil) }()
-
-			workCtx, cancel := context.WithTimeout(workCtx, 30*time.Second)
-			defer cancel()
-
-			if err := n.duplicateSend(workCtx, work); err != nil {
-				log.Error(workCtx, err, "duplicate send")
-
-				continue
-			}
-			log.Info(workCtx, "send success")
+			n.processSendWork(i, work)
 		}
 	}
 }
+
+func (n *notifier) processSendWork(i int, work sendWork) {
+	workCtx := telemetry.StartWith(n.Context(),
+		append(n.TelemetryLabels(),
+			telemetrymodel.KeyOperation, "Run",
+			"worker", i,
+			"group", work.group.Name,
+			"time", timeutil.Format(work.group.Time),
+			"receiver", work.receiver.Name,
+		)...,
+	)
+	defer func() { telemetry.End(workCtx, nil) }()
+
+	workCtx, cancel := context.WithTimeout(workCtx, 30*time.Second)
+	defer cancel()
+
+	if err := n.duplicateSend(workCtx, work); err != nil {
+		log.Error(workCtx, err, "duplicate send")
+
+		return
+	}
+	log.Info(workCtx, "send success")
+}
+
 
 func (n *notifier) duplicateSend(ctx context.Context, work sendWork) error {
 	if n.isSent(ctx, work.group, work.receiver) { // Double check.

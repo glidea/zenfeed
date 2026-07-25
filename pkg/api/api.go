@@ -19,7 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"reflect"
 	"strings"
