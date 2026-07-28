@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/mcp.so%2Fzenfeed%2Fglidea.svg)](https://mcptoplist.com/server/mcp.so%2Fzenfeed%2Fglidea)
+
 ---
 
 <img width="400" height="200" alt="33f1d0d49cce103272da3821f66a2820" src="https://github.com/user-attachments/assets/fd909546-1544-4b7d-a7c1-67244d729e4f" />
