@@ -77,12 +77,17 @@ func (g *gemini) WAV(ctx context.Context, text string, speakers []Speaker) (r io
 		return nil, errors.Wrap(err, "build wav request payload")
 	}
 
-	pcmData, err := g.doWAVRequest(ctx, reqPayload)
+	audioData, err := g.doWAVRequest(ctx, reqPayload)
 	if err != nil {
 		return nil, errors.Wrap(err, "do wav request")
 	}
 
-	return streamWAV(pcmData), nil
+	// Newer Gemini TTS models can return a complete WAV. Only wrap raw PCM.
+	if len(audioData) >= 12 && string(audioData[:4]) == "RIFF" && string(audioData[8:12]) == "WAVE" {
+		return io.NopCloser(bytes.NewReader(audioData)), nil
+	}
+
+	return streamWAV(audioData), nil
 }
 
 func (g *gemini) doWAVRequest(ctx context.Context, reqPayload *geminiRequest) ([]byte, error) {
@@ -121,12 +126,12 @@ func (g *gemini) doWAVRequest(ctx context.Context, reqPayload *geminiRequest) ([
 	}
 
 	audioDataB64 := ttsResp.Candidates[0].Content.Parts[0].InlineData.Data
-	pcmData, err := base64.StdEncoding.DecodeString(audioDataB64)
+	audioData, err := base64.StdEncoding.DecodeString(audioDataB64)
 	if err != nil {
 		return nil, errors.Wrap(err, "decode base64")
 	}
 
-	return pcmData, nil
+	return audioData, nil
 }
 
 func buildWAVRequestPayload(text string, speakers []Speaker) (*geminiRequest, error) {
